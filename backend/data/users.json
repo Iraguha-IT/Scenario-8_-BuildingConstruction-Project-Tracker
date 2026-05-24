@@ -1,0 +1,9 @@
+[
+  {
+    "UserID": 1,
+    "Username": "admin",
+    "PasswordHash": "$2b$10$om/c/r3OUnCR2wqITLnpTuFJujDU9LJU/ZiWSqIzVB9XqOsmHUuPG",
+    "FullName": "Administrator",
+    "Role": "admin"
+  }
+]

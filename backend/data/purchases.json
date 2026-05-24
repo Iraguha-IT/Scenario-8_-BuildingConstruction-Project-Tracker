@@ -1,0 +1,22 @@
+[
+  {
+    "PurchaseID": 1,
+    "PurchaseDate": "2026-05-15",
+    "Quantity": -1,
+    "UnitPrice": 4655,
+    "TotalCost": -4655,
+    "ProjectID": "1",
+    "SupplierID": "1",
+    "MaterialID": "2"
+  },
+  {
+    "PurchaseID": 2,
+    "PurchaseDate": "2026-05-07",
+    "Quantity": 66,
+    "UnitPrice": 3535453,
+    "TotalCost": 233339898,
+    "ProjectID": "1",
+    "SupplierID": "1",
+    "MaterialID": "1"
+  }
+]

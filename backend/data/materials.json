@@ -1,0 +1,38 @@
+[
+  {
+    "MaterialID": 1,
+    "MaterialName": "Cement",
+    "UnitOfMeasure": "per 50kg bag",
+    "AvgPrice": 9000
+  },
+  {
+    "MaterialID": 2,
+    "MaterialName": "River Sand",
+    "UnitOfMeasure": "per cubic meter",
+    "AvgPrice": 35000
+  },
+  {
+    "MaterialID": 3,
+    "MaterialName": "Crushed Stones",
+    "UnitOfMeasure": "per cubic meter",
+    "AvgPrice": 45000
+  },
+  {
+    "MaterialID": 4,
+    "MaterialName": "Steel Rebar",
+    "UnitOfMeasure": "per piece",
+    "AvgPrice": 12000
+  },
+  {
+    "MaterialID": 5,
+    "MaterialName": "Bricks",
+    "UnitOfMeasure": "per 100 pieces",
+    "AvgPrice": 15000
+  },
+  {
+    "MaterialID": 6,
+    "MaterialName": "Paint",
+    "UnitOfMeasure": "per 20-liter bucket",
+    "AvgPrice": 75000
+  }
+]
