@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -5,7 +6,8 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
+const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 
 app.use(cors());
 app.use(express.json());
@@ -23,10 +25,24 @@ const write = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 
 
 // Users file with default admin
 const usersFile = `${DATA_DIR}/users.json`;
-if (!fs.existsSync(usersFile)) {
+let users = read(usersFile);
+let usersChanged = false;
+
+if (!users.find(u => u.Username === 'admin')) {
     const hashed = bcrypt.hashSync('admin123', 10);
-    write(usersFile, [{ UserID: 1, Username: 'admin', PasswordHash: hashed, FullName: 'Administrator', Role: 'admin' }]);
+    users.push({ UserID: 1, Username: 'admin', PasswordHash: hashed, FullName: 'Administrator', Role: 'admin' });
+    usersChanged = true;
 }
+
+if (!users.find(u => u.Username === 'mugisha')) {
+    const hashed = bcrypt.hashSync('mugisha123', 10);
+    const newId = users.length ? Math.max(...users.map(u => u.UserID)) + 1 : 1;
+    users.push({ UserID: newId, Username: 'mugisha', PasswordHash: hashed, FullName: 'Mugisha', Role: 'admin' });
+    usersChanged = true;
+    console.log("Initialization: Created missing user 'mugisha'");
+}
+
+if (usersChanged) write(usersFile, users);
 
 // Other data files
 const projectsFile = `${DATA_DIR}/projects.json`;
@@ -52,7 +68,7 @@ if (!fs.existsSync(purchasesFile)) write(purchasesFile, []);
 const auth = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
-    jwt.verify(token, 'secretkey', (err, user) => {
+    jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) return res.status(403).json({ error: 'Invalid token' });
         req.user = user;
         next();
@@ -61,14 +77,19 @@ const auth = (req, res, next) => {
 
 // Register
 app.post('/api/register', async (req, res) => {
-    const { username, password, fullName } = req.body;
-    const users = read(usersFile);
-    if (users.find(u => u.Username === username)) return res.status(400).json({ error: 'Username exists' });
-    const newId = users.length ? Math.max(...users.map(u => u.UserID)) + 1 : 1;
-    const hashed = bcrypt.hashSync(password, 10);
-    users.push({ UserID: newId, Username: username, PasswordHash: hashed, FullName: fullName || username, Role: 'manager' });
-    write(usersFile, users);
-    res.json({ success: true });
+    try {
+        const { username, password, fullName } = req.body;
+        const users = read(usersFile);
+        if (users.find(u => u.Username === username)) return res.status(400).json({ error: 'Username exists' });
+        const newId = users.length ? Math.max(...users.map(u => u.UserID)) + 1 : 1;
+        const hashed = bcrypt.hashSync(password, 10);
+        users.push({ UserID: newId, Username: username, PasswordHash: hashed, FullName: fullName || username, Role: 'manager' });
+        write(usersFile, users);
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Registration Error:", error);
+        res.status(500).json({ error: 'Internal server error during registration' });
+    }
 });
 
 // Login
@@ -77,8 +98,27 @@ app.post('/api/login', (req, res) => {
     const users = read(usersFile);
     const user = users.find(u => u.Username === username);
     if (!user || !bcrypt.compareSync(password, user.PasswordHash)) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ userId: user.UserID, username: user.Username }, 'secretkey', { expiresIn: '8h' });
+    const token = jwt.sign({ userId: user.UserID, username: user.Username }, JWT_SECRET, { expiresIn: '8h' });
     res.json({ success: true, token, user: { id: user.UserID, username: user.Username, fullName: user.FullName, role: user.Role } });
+    try {
+        const { username, password } = req.body;
+        console.log(`[AUTH] Login attempt received for: "${username}"`);
+
+        const users = read(usersFile);
+        const user = users.find(u => u.Username === username);
+
+        if (!user || !bcrypt.compareSync(password, user.PasswordHash)) {
+            console.log(`[AUTH] Login FAILED for: "${username}". (User found: ${!!user})`);
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        const token = jwt.sign({ userId: user.UserID, username: user.Username }, JWT_SECRET, { expiresIn: '8h' });
+        console.log(`[AUTH] Login SUCCESSFUL for: "${username}"`);
+        res.json({ success: true, token, user: { id: user.UserID, username: user.Username, fullName: user.FullName, role: user.Role } });
+    } catch (err) {
+        console.error("[AUTH] Server Error during login:", err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // Projects CRUD
