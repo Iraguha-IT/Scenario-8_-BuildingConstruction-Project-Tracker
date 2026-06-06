@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const path = require('path');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
@@ -12,16 +13,33 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 app.use(cors());
 app.use(express.json());
 
+// Global Request Logger
+app.use((req, res, next) => {
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+    next();
+});
+
 // Data directory
-const DATA_DIR = './data';
+const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
 // Helper functions
 const read = (file, def = []) => {
-    if (!fs.existsSync(file)) return def;
-    return JSON.parse(fs.readFileSync(file));
+    try {
+        if (!fs.existsSync(file)) return def;
+        const content = fs.readFileSync(file, 'utf8');
+        return content ? JSON.parse(content) : def;
+    } catch (err) {
+        console.error(`[ERROR] Failed to read ${file}:`, err.message);
+        return def;
+    }
 };
 const write = (file, data) => fs.writeFileSync(file, JSON.stringify(data, null, 2));
+
+// Root Route - Health Check
+app.get('/', (req, res) => {
+    res.send({ status: "API is running", port: PORT, data_dir: DATA_DIR });
+});
 
 // Users file with default admin
 const usersFile = `${DATA_DIR}/users.json`;
@@ -50,7 +68,8 @@ const suppliersFile = `${DATA_DIR}/suppliers.json`;
 const materialsFile = `${DATA_DIR}/materials.json`;
 const purchasesFile = `${DATA_DIR}/purchases.json`;
 
-if (!fs.existsSync(materialsFile)) {
+const existingMaterials = read(materialsFile);
+if (!fs.existsSync(materialsFile) || existingMaterials.length === 0) {
     write(materialsFile, [
         { MaterialID: 1, MaterialName: 'Cement', UnitOfMeasure: 'per 50kg bag', AvgPrice: 9000 },
         { MaterialID: 2, MaterialName: 'River Sand', UnitOfMeasure: 'per cubic meter', AvgPrice: 35000 },
@@ -67,9 +86,15 @@ if (!fs.existsSync(purchasesFile)) write(purchasesFile, []);
 // Auth middleware
 const auth = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    if (!token) {
+        console.log(`[AUTH] Missing token for ${req.method} ${req.url}`);
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
     jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Invalid token' });
+        if (err) {
+            console.log(`[AUTH] Invalid token for ${req.method} ${req.url}`);
+            return res.status(403).json({ error: 'Invalid token' });
+        }
         req.user = user;
         next();
     });
@@ -94,12 +119,6 @@ app.post('/api/register', async (req, res) => {
 
 // Login
 app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    const users = read(usersFile);
-    const user = users.find(u => u.Username === username);
-    if (!user || !bcrypt.compareSync(password, user.PasswordHash)) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ userId: user.UserID, username: user.Username }, JWT_SECRET, { expiresIn: '8h' });
-    res.json({ success: true, token, user: { id: user.UserID, username: user.Username, fullName: user.FullName, role: user.Role } });
     try {
         const { username, password } = req.body;
         console.log(`[AUTH] Login attempt received for: "${username}"`);
@@ -122,7 +141,18 @@ app.post('/api/login', (req, res) => {
 });
 
 // Projects CRUD
-app.get('/api/projects', auth, (req, res) => res.json(read(projectsFile)));
+app.get('/api/projects', auth, (req, res) => {
+    const projects = read(projectsFile);
+    const page = parseInt(req.query._page) || 1;
+    const limit = parseInt(req.query._limit) || projects.length; // Default to all if no limit
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+
+    const paginatedProjects = projects.slice(startIndex, endIndex);
+    console.log(`[DATA] GET /api/projects - Found ${projects.length}, returning ${paginatedProjects.length}`);
+    res.json(paginatedProjects);
+});
+
 app.post('/api/projects', auth, (req, res) => {
     const projects = read(projectsFile);
     const newId = projects.length ? Math.max(...projects.map(p => p.ProjectID)) + 1 : 1;
@@ -149,7 +179,11 @@ app.delete('/api/projects/:id', auth, (req, res) => {
 });
 
 // Suppliers (same pattern)
-app.get('/api/suppliers', auth, (req, res) => res.json(read(suppliersFile)));
+app.get('/api/suppliers', auth, (req, res) => {
+    const data = read(suppliersFile);
+    console.log(`[DATA] GET /api/suppliers - Found ${data.length}`);
+    res.json(data);
+});
 app.post('/api/suppliers', auth, (req, res) => {
     const suppliers = read(suppliersFile);
     const newId = suppliers.length ? Math.max(...suppliers.map(s => s.SupplierID)) + 1 : 1;
@@ -176,7 +210,11 @@ app.delete('/api/suppliers/:id', auth, (req, res) => {
 });
 
 // Materials
-app.get('/api/materials', auth, (req, res) => res.json(read(materialsFile)));
+app.get('/api/materials', auth, (req, res) => {
+    const data = read(materialsFile);
+    console.log(`[DATA] GET /api/materials - Found ${data.length}`);
+    res.json(data);
+});
 
 // Purchases
 app.get('/api/purchases', auth, (req, res) => {
@@ -190,6 +228,7 @@ app.get('/api/purchases', auth, (req, res) => {
         SupplierName: suppliers.find(s => s.SupplierID === p.SupplierID)?.SupplierName,
         MaterialName: materials.find(m => m.MaterialID === p.MaterialID)?.MaterialName
     }));
+    console.log(`[DATA] Returning ${enriched.length} enriched purchases`);
     res.json(enriched);
 });
 app.post('/api/purchases', auth, (req, res) => {

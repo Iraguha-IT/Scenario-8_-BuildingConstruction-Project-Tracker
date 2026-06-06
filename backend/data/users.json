@@ -5,5 +5,12 @@
     "PasswordHash": "$2b$10$om/c/r3OUnCR2wqITLnpTuFJujDU9LJU/ZiWSqIzVB9XqOsmHUuPG",
     "FullName": "Administrator",
     "Role": "admin"
+  },
+  {
+    "UserID": 2,
+    "Username": "mugisha",
+    "PasswordHash": "$2b$10$WkmXTcBU0pHvlqw0BqQJ6On.lp.isWeZ8tcf0V2Xc/5zTxHwI9roK",
+    "FullName": "Mugisha",
+    "Role": "admin"
   }
 ]
